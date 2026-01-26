@@ -2,13 +2,13 @@ package koduck
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/panjf2000/ants/v2"
-	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -22,7 +22,6 @@ type Server struct {
 	pool      *ants.Pool
 	bufPool   sync.Pool
 	shutdownC chan struct{}
-	Log       *Log
 }
 
 type WorkItem struct {
@@ -38,7 +37,6 @@ func NewServerWithConfig(config ServerConfig) (*Server, error) {
 	scheduler := NewScheduler()
 	return &Server{
 		config:   config,
-		Log:      NewLog(config.Log),
 		msgQueue: make(chan *Message, config.MsgQueueSize),
 		pool:     pool,
 		bufPool: sync.Pool{
@@ -67,7 +65,7 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
-	s.Log.Access("server started", zap.String("addr", s.config.Addr))
+	s.eventBus.Publish(ServerEventStarted, nil)
 
 	s.startHeartbeat(30 * time.Second)
 	go s.scheduler.Start()
@@ -77,7 +75,9 @@ func (s *Server) Start() error {
 			s.pool.Submit(func() {
 				err := s.router.Handle(m)
 				if err != nil {
-					s.Log.Error(err, "router handle error")
+					s.eventBus.Publish(ServerEventError, &ServerEventErrorPayload{
+						Err: err,
+					})
 				}
 			})
 		}
@@ -86,15 +86,14 @@ func (s *Server) Start() error {
 	// 接收连接
 	for {
 		connSock, err := ln.Accept()
-		s.Log.Access("client connected",
-			zap.String("addr", connSock.RemoteAddr().String()),
-		)
 		if err != nil {
 			select {
 			case <-s.shutdownC:
 				return nil
 			default:
-				s.Log.Error(err, "接收错误")
+				s.eventBus.Publish(ServerEventError, &ServerEventErrorPayload{
+					Err: err,
+				})
 				continue
 			}
 		}
@@ -123,7 +122,9 @@ func (s *Server) handleConn(c *Conn) {
 	lenBuf := make([]byte, 4)
 	for {
 		if _, err := io.ReadFull(c.Conn, lenBuf); err != nil {
-			s.Log.Error(err, "读取错误")
+			s.eventBus.Publish(ServerEventError, &ServerEventErrorPayload{
+				Err: err,
+			})
 			return
 		}
 
@@ -135,7 +136,9 @@ func (s *Server) handleConn(c *Conn) {
 		}
 		data := buf[:msgLen]
 		if _, err := io.ReadFull(c.Conn, data); err != nil {
-			s.Log.Error(err, "读取长度错误")
+			s.eventBus.Publish(ServerEventError, &ServerEventErrorPayload{
+				Err: err,
+			})
 			s.bufPool.Put(buf)
 			return
 		}
@@ -143,7 +146,9 @@ func (s *Server) handleConn(c *Conn) {
 		msg, err := DecodeMessage(data)
 		s.bufPool.Put(buf)
 		if err != nil {
-			s.Log.Error(err, "message decode", zap.String("conn", c.String()), zap.String("message", string(data)))
+			s.eventBus.Publish(ServerEventError, &ServerEventErrorPayload{
+				Err: err,
+			})
 			continue
 		}
 		msg.Conn = c
@@ -164,7 +169,7 @@ func (s *Server) Every(interval time.Duration, handler func()) {
 	s.scheduler.Every(interval, handler)
 }
 
-func (s *Server) On(eventName string, handler func(payload EventPayload) error) {
+func (s *Server) On(eventName int, handler func(payload EventPayload) error) {
 	s.eventBus.Subscribe(eventName, handler)
 }
 
@@ -176,7 +181,9 @@ func (s *Server) startHeartbeat(interval time.Duration) {
 			c := value.(*Conn)
 
 			if !c.CheckHeartbeat(now) {
-				s.Log.Error(nil, "心跳超时，关闭连接", zap.String("conn", c.String()))
+				s.eventBus.Publish(ServerEventError, &ServerEventErrorPayload{
+					Err: errors.New("心跳超时，关闭连接"),
+				})
 				c.CloseSafely()
 				s.conns.Delete(c.ID)
 			}
@@ -187,7 +194,6 @@ func (s *Server) startHeartbeat(interval time.Duration) {
 
 func (s *Server) registerDefaultRoute() {
 	RegisterRoute(s.router, ClientHeartbeat, func(c *Conn, t *string) error {
-		s.Log.Access("客户端心跳", zap.String("conn", c.String()))
 		c.UpdateHeartbeat()
 		return nil
 	})

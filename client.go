@@ -5,8 +5,6 @@ import (
 	"io"
 	"net"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type Client struct {
@@ -15,7 +13,6 @@ type Client struct {
 	router    *Router
 	eventBus  *EventBus
 	scheduler *Scheduler
-	Log       *Log
 }
 
 func NewClientWithConfig(cnf ClientConfig) *Client {
@@ -24,19 +21,24 @@ func NewClientWithConfig(cnf ClientConfig) *Client {
 		conn:      nil,
 		eventBus:  NewEventBus(),
 		scheduler: NewScheduler(),
-		Log:       NewLog(cnf.Log),
 	}
 	return c
 }
 
 func (c *Client) Start() error {
-	conn, err := net.Dial("tcp", c.config.Addr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp", c.config.Addr)
+	if err != nil {
+		c.eventBus.Publish(ClientEventError, &ClientEventErrorPayload{
+			Err: err,
+		})
+		return err
+	}
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	if err != nil {
 		return err
 	}
 	c.conn = NewConn(0, conn)
-	c.Log.Access("连接成功")
-	c.eventBus.Publish(ClientEventConnected, &ClientEventConnectedPayload{})
+	c.eventBus.Publish(ClientEventConnected, nil)
 	c.startHeartbeat(5 * time.Second)
 	go c.scheduler.Start()
 	go c.handleConn(c.conn)
@@ -45,27 +47,33 @@ func (c *Client) Start() error {
 
 func (c *Client) handleConn(conn *Conn) {
 	defer func() {
-		c.Log.Access("断开连接")
+		c.eventBus.Publish(ClientEventDisconnected, nil)
 		c.conn.Close()
 	}()
 
 	for {
 		lenBuf := make([]byte, 4)
 		if _, err := io.ReadFull(conn.Conn, lenBuf); err != nil {
-			c.Log.Error(err, "读取错误", zap.String("conn", conn.String()))
+			c.eventBus.Publish(ClientEventError, &ClientEventErrorPayload{
+				Err: err,
+			})
 			return
 		}
 
 		msgLen := binary.BigEndian.Uint32(lenBuf)
 		data := make([]byte, msgLen)
 		if _, err := io.ReadFull(conn.Conn, data); err != nil {
-			c.Log.Error(err, "读取消息长度错误", zap.String("conn", conn.String()))
+			c.eventBus.Publish(ClientEventError, &ClientEventErrorPayload{
+				Err: err,
+			})
 			return
 		}
 
 		msg, err := DecodeMessage(data)
 		if err != nil {
-			c.Log.Error(err, "解码失败", zap.String("conn", conn.String()))
+			c.eventBus.Publish(ClientEventError, &ClientEventErrorPayload{
+				Err: err,
+			})
 			continue
 		}
 		msg.Conn = conn
@@ -77,7 +85,7 @@ func (c *Client) SetRouter(r *Router) {
 	c.router = r
 }
 
-func (c *Client) On(eventName string, handler func(payload EventPayload) error) {
+func (c *Client) On(eventName int, handler func(payload EventPayload) error) {
 	c.eventBus.Subscribe(eventName, handler)
 }
 

@@ -6,17 +6,33 @@ import (
 )
 
 const (
-	ClientEventConnected = "connected"
-)
+	ServerEventError              = 1
+	ServerEventStarted            = 2
+	ServerEventClientConnected    = 3
+	ServerEventClientDisconnected = 4
 
-const (
-	ServerEventClientConnected    = "client_connected"
-	ServerEventClientDisconnected = "client_disconnected"
+	ClientEventError        = 101
+	ClientEventConnected    = 102
+	ClientEventDisconnected = 103
 )
 
 type EventPayload interface {
 	isEventPayload()
 }
+
+type ServerEventErrorPayload struct {
+	Err  error
+	Data map[string]any
+}
+
+func (p *ServerEventErrorPayload) isEventPayload() {}
+
+type ClientEventErrorPayload struct {
+	Err  error
+	Data map[string]any
+}
+
+func (p *ClientEventErrorPayload) isEventPayload() {}
 
 type ServerEventClientConnectedPayload struct {
 	Time time.Time
@@ -37,23 +53,23 @@ type ClientEventConnectedPayload struct{}
 func (p *ClientEventConnectedPayload) isEventPayload() {}
 
 type EventBus struct {
-	subscribers map[string][]func(payload EventPayload) error
+	subscribers map[int][]func(payload EventPayload) error
 	mu          sync.RWMutex
 }
 
 func NewEventBus() *EventBus {
 	return &EventBus{
-		subscribers: make(map[string][]func(payload EventPayload) error),
+		subscribers: make(map[int][]func(payload EventPayload) error),
 	}
 }
 
-func (bus *EventBus) Subscribe(eventName string, handler func(payload EventPayload) error) {
+func (bus *EventBus) Subscribe(eventName int, handler func(payload EventPayload) error) {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 	bus.subscribers[eventName] = append(bus.subscribers[eventName], handler)
 }
 
-func (bus *EventBus) Publish(eventName string, payload EventPayload) {
+func (bus *EventBus) Publish(eventName int, payload EventPayload) {
 	bus.mu.RLock()
 	defer bus.mu.RUnlock()
 	if handlers, ok := bus.subscribers[eventName]; ok {
@@ -63,7 +79,7 @@ func (bus *EventBus) Publish(eventName string, payload EventPayload) {
 	}
 }
 
-func (bus *EventBus) PublishAsync(eventName string, payload EventPayload) {
+func (bus *EventBus) PublishAsync(eventName int, payload EventPayload) {
 	bus.mu.RLock()
 	defer bus.mu.RUnlock()
 	if handlers, ok := bus.subscribers[eventName]; ok {
