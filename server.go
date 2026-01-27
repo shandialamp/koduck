@@ -112,8 +112,8 @@ func (s *Server) Start() error {
 func (s *Server) handleConn(c *Conn) {
 	defer func() {
 		s.eventBus.Publish(ServerEventClientDisconnected, &ServerEventClientDisconnectedPayload{
-			ConnKey: c.String(),
-			Time:    time.Now(),
+			ConnAddr: c.RemoteAddr(),
+			Time:     time.Now(),
 		})
 		s.conns.Delete(c.ID)
 		c.Close()

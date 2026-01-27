@@ -42,15 +42,23 @@ type ServerEventClientConnectedPayload struct {
 func (p *ServerEventClientConnectedPayload) isEventPayload() {}
 
 type ServerEventClientDisconnectedPayload struct {
-	Time    time.Time
-	ConnKey string
+	Time     time.Time
+	ConnAddr string
 }
 
 func (p *ServerEventClientDisconnectedPayload) isEventPayload() {}
 
-type ClientEventConnectedPayload struct{}
+type ClientEventConnectedPayload struct {
+	Conn *Conn
+}
 
 func (p *ClientEventConnectedPayload) isEventPayload() {}
+
+type ClientEventDisconnectedPayload struct {
+	ConnAddr string
+}
+
+func (p *ClientEventDisconnectedPayload) isEventPayload() {}
 
 type EventBus struct {
 	subscribers map[int][]func(payload EventPayload) error

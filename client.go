@@ -38,7 +38,9 @@ func (c *Client) Start() error {
 		return err
 	}
 	c.conn = NewConn(0, conn)
-	c.eventBus.Publish(ClientEventConnected, nil)
+	c.eventBus.Publish(ClientEventConnected, &ClientEventConnectedPayload{
+		Conn: c.conn,
+	})
 	c.startHeartbeat(5 * time.Second)
 	go c.scheduler.Start()
 	go c.handleConn(c.conn)
@@ -106,5 +108,8 @@ func (c *Client) startHeartbeat(interval time.Duration) {
 }
 
 func (c *Client) Stop() {
+	c.eventBus.Publish(ClientEventDisconnected, &ClientEventDisconnectedPayload{
+		ConnAddr: c.conn.RemoteAddr(),
+	})
 	c.conn.Close()
 }
