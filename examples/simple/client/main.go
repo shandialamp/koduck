@@ -40,7 +40,7 @@ func main() {
 	})
 	client.On(koduck.ClientEventDisconnected, func(_payload koduck.EventPayload) error {
 		payload := _payload.(*koduck.ClientEventDisconnectedPayload)
-		fmt.Println("断开连接: ", payload.ConnAddr)
+		fmt.Println("断开连接: ", payload.ServerAddr, "原因:", payload.Reason)
 		return nil
 	})
 

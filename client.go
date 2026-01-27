@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -13,6 +14,8 @@ type Client struct {
 	router    *Router
 	eventBus  *EventBus
 	scheduler *Scheduler
+	mu        sync.Mutex
+	stopped   bool
 }
 
 func NewClientWithConfig(cnf ClientConfig) *Client {
@@ -39,7 +42,10 @@ func (c *Client) Start() error {
 	}
 	c.conn = NewConn(0, conn)
 	c.eventBus.Publish(ClientEventConnected, &ClientEventConnectedPayload{
-		Conn: c.conn,
+		Conn:       c.conn,
+		ServerAddr: c.config.Addr,
+		LocalAddr:  conn.LocalAddr().String(),
+		Time:       time.Now(),
 	})
 	c.startHeartbeat(5 * time.Second)
 	go c.scheduler.Start()
@@ -49,9 +55,17 @@ func (c *Client) Start() error {
 
 func (c *Client) handleConn(conn *Conn) {
 	defer func() {
-		c.eventBus.Publish(ClientEventDisconnected, &ClientEventDisconnectedPayload{
-			ConnAddr: c.conn.RemoteAddr(),
-		})
+		c.mu.Lock()
+		alreadyStopped := c.stopped
+		c.mu.Unlock()
+
+		if !alreadyStopped {
+			c.eventBus.Publish(ClientEventDisconnected, &ClientEventDisconnectedPayload{
+				ServerAddr: c.config.Addr,
+				Reason:     "connection closed unexpectedly",
+				Time:       time.Now(),
+			})
+		}
 		c.conn.Close()
 	}()
 
@@ -110,5 +124,26 @@ func (c *Client) startHeartbeat(interval time.Duration) {
 }
 
 func (c *Client) Stop() {
-	c.conn.Close()
+	c.mu.Lock()
+	if c.stopped {
+		c.mu.Unlock()
+		return
+	}
+	c.stopped = true
+	c.mu.Unlock()
+
+	// 发布客户端主动断开事件
+	c.eventBus.Publish(ClientEventDisconnected, &ClientEventDisconnectedPayload{
+		ServerAddr: c.config.Addr,
+		Reason:     "client stopped",
+		Time:       time.Now(),
+	})
+
+	// 关闭连接
+	if c.conn != nil {
+		c.conn.Close()
+	}
+
+	// 停止调度器
+	c.scheduler.Stop()
 }

@@ -49,13 +49,18 @@ type ServerEventClientDisconnectedPayload struct {
 func (p *ServerEventClientDisconnectedPayload) isEventPayload() {}
 
 type ClientEventConnectedPayload struct {
-	Conn *Conn
+	Conn       *Conn
+	ServerAddr string // 服务端地址（包括端口）
+	LocalAddr  string // 本地地址（包括端口）
+	Time       time.Time
 }
 
 func (p *ClientEventConnectedPayload) isEventPayload() {}
 
 type ClientEventDisconnectedPayload struct {
-	ConnAddr string
+	ServerAddr string // 连接的服务端地址
+	Reason     string // 断开原因
+	Time       time.Time
 }
 
 func (p *ClientEventDisconnectedPayload) isEventPayload() {}
