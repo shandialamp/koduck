@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/shandialamp/koduck"
 )
@@ -31,6 +34,11 @@ func main() {
 		fmt.Println("客户端断开连接: ", payload.ConnAddr)
 		return nil
 	})
+	server.On(koduck.ServerEventError, func(_payload koduck.EventPayload) error {
+		payload := _payload.(*koduck.ServerEventErrorPayload)
+		fmt.Println("服务端错误: ", payload.Err)
+		return nil
+	})
 
 	router := koduck.NewRouter()
 	koduck.RegisterRoute(router, 1000, func(c *koduck.Conn, params *SayName) error {
@@ -43,7 +51,18 @@ func main() {
 	})
 	server.SetRouter(router)
 
-	if err := server.Start(); err != nil {
+	go func() {
+		if err := server.Start(); err != nil {
+			panic(err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	fmt.Println("服务端准备停止")
+	if err := server.Stop(); err != nil {
 		panic(err)
 	}
+	fmt.Println("服务端停止")
 }

@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/shandialamp/koduck"
 )
@@ -46,5 +48,10 @@ func main() {
 		panic(err)
 	}
 
-	time.Sleep(1 * time.Hour)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	fmt.Println("客户端准备停止")
+	client.Stop()
+	fmt.Println("客户端停止")
 }

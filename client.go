@@ -49,7 +49,9 @@ func (c *Client) Start() error {
 
 func (c *Client) handleConn(conn *Conn) {
 	defer func() {
-		c.eventBus.Publish(ClientEventDisconnected, nil)
+		c.eventBus.Publish(ClientEventDisconnected, &ClientEventDisconnectedPayload{
+			ConnAddr: c.conn.RemoteAddr(),
+		})
 		c.conn.Close()
 	}()
 
@@ -108,8 +110,5 @@ func (c *Client) startHeartbeat(interval time.Duration) {
 }
 
 func (c *Client) Stop() {
-	c.eventBus.Publish(ClientEventDisconnected, &ClientEventDisconnectedPayload{
-		ConnAddr: c.conn.RemoteAddr(),
-	})
 	c.conn.Close()
 }

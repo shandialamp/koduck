@@ -22,6 +22,8 @@ type Server struct {
 	pool      *ants.Pool
 	bufPool   sync.Pool
 	shutdownC chan struct{}
+	listener  net.Listener
+	mu        sync.Mutex
 }
 
 type WorkItem struct {
@@ -65,6 +67,9 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
+	s.listener = ln
+	s.mu.Unlock()
 	s.eventBus.Publish(ServerEventStarted, nil)
 
 	s.startHeartbeat(30 * time.Second)
@@ -210,4 +215,41 @@ func (s *Server) FindConn(handle func(c *Conn) bool) *Conn {
 		return true
 	})
 	return result
+}
+
+// Stop 优雅关闭服务器
+func (s *Server) Stop() error {
+	// 关闭 shutdown 信号
+	select {
+	case <-s.shutdownC:
+		return nil // 已经关闭
+	default:
+		close(s.shutdownC)
+	}
+
+	// 关闭 listener 停止接受新连接
+	s.mu.Lock()
+	if s.listener != nil {
+		s.listener.Close()
+	}
+	s.mu.Unlock()
+
+	// 关闭所有现有连接
+	s.conns.Range(func(key, value any) bool {
+		if c, ok := value.(*Conn); ok {
+			c.Close()
+		}
+		return true
+	})
+
+	// 停止调度器
+	s.scheduler.Stop()
+
+	// 关闭消息队列
+	close(s.msgQueue)
+
+	// 释放工作池
+	s.pool.Release()
+
+	return nil
 }
