@@ -161,10 +161,16 @@ func (s *Server) handleConn(c *Conn) {
 	}
 }
 
-func (s *Server) Broadcast(msg *Message) {
+func (s *Server) Broadcast(msg *Message, filter func(*Conn) bool) {
 	s.conns.Range(func(_, value any) bool {
 		if c, ok := value.(*Conn); ok {
-			c.Send(msg)
+			if filter != nil && filter(c) {
+				if err := c.Send(msg); err != nil {
+					s.eventBus.Publish(ServerEventError, &ServerEventErrorPayload{
+						Err: err,
+					})
+				}
+			}
 		}
 		return true
 	})
