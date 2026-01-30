@@ -21,7 +21,7 @@ func DefaultServerConfig() ServerConfig {
 	}
 }
 
-func DefaultClientLog() ClientConfig {
+func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
 		Addr: "127.0.0.1:10001",
 	}

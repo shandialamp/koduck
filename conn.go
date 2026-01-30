@@ -10,14 +10,15 @@ import (
 )
 
 type Conn struct {
-	ID       uint64
-	Conn     net.Conn
-	LastBeat int64         // 最后心跳时间，UnixNano
-	Timeout  time.Duration // 心跳超时时间
-	mu       sync.Mutex
-	sendChan chan []byte
-	closed   chan struct{}
-	property sync.Map
+	ID        uint64
+	Conn      net.Conn
+	LastBeat  int64         // 最后心跳时间，UnixNano
+	Timeout   time.Duration // 心跳超时时间
+	mu        sync.Mutex
+	sendChan  chan []byte
+	closed    chan struct{}
+	closeOnce sync.Once // 防止重复关闭
+	property  sync.Map
 }
 
 func NewConn(id uint64, conn net.Conn) *Conn {
@@ -52,9 +53,14 @@ func (c *Conn) Send(msg *Message) error {
 
 // Close 关闭连接
 func (c *Conn) Close() {
-	if c.Conn != nil {
-		_ = c.Conn.Close()
-	}
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		if c.Conn != nil {
+			_ = c.Conn.Close()
+		}
+		c.mu.Unlock()
+		close(c.closed)
+	})
 }
 func (c *Conn) writeLoop() {
 	for {
@@ -72,6 +78,13 @@ func (c *Conn) writeLoop() {
 }
 
 func (c *Conn) writeFull(buf []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.Conn == nil {
+		return io.ErrClosedPipe
+	}
+
 	total := 0
 	for total < len(buf) {
 		n, err := c.Conn.Write(buf[total:])
@@ -96,16 +109,18 @@ func (c *Conn) CheckHeartbeat(now int64) bool {
 	defer c.mu.Unlock()
 
 	elapsed := time.Duration(now - c.LastBeat)
-	fmt.Println(c.LastBeat, elapsed, c.Timeout)
-
 	return elapsed <= c.Timeout
 }
 
 func (c *Conn) CloseSafely() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	_ = c.Conn.Close()
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		if c.Conn != nil {
+			_ = c.Conn.Close()
+		}
+		c.mu.Unlock()
+		close(c.closed)
+	})
 }
 
 func (c *Conn) UpdateHeartbeat() {

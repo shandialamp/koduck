@@ -206,6 +206,9 @@ func (s *Server) startHeartbeat(interval time.Duration) {
 func (s *Server) registerDefaultRoute() {
 	RegisterRoute(s.router, ClientHeartbeat, func(c *Conn, t *string) error {
 		c.UpdateHeartbeat()
+		s.eventBus.Publish(ServerEventClientHeartbeat, &ServerEventClientHeartbeatPayload{
+			Conn: c,
+		})
 		return nil
 	})
 }

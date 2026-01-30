@@ -18,7 +18,7 @@ type Ok struct {
 }
 
 func main() {
-	client := koduck.NewClientWithConfig(koduck.DefaultClientLog())
+	client := koduck.NewClientWithConfig(koduck.DefaultClientConfig())
 
 	router := koduck.NewRouter()
 	koduck.RegisterRoute(router, 2000, func(c *koduck.Conn, params *Ok) error {

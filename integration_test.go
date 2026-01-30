@@ -165,7 +165,7 @@ func TestServerBroadcast(t *testing.T) {
 
 	// 服务端广播
 	msg, _ := EncodeMessage(2000, "broadcast message")
-	server.Broadcast(msg)
+	server.Broadcast(msg, nil)
 
 	time.Sleep(200 * time.Millisecond)
 

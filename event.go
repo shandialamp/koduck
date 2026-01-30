@@ -10,6 +10,7 @@ const (
 	ServerEventStarted            = 2
 	ServerEventClientConnected    = 3
 	ServerEventClientDisconnected = 4
+	ServerEventClientHeartbeat    = 5
 
 	ClientEventError        = 101
 	ClientEventConnected    = 102
@@ -65,6 +66,12 @@ type ClientEventDisconnectedPayload struct {
 
 func (p *ClientEventDisconnectedPayload) isEventPayload() {}
 
+type ServerEventClientHeartbeatPayload struct {
+	Conn *Conn
+}
+
+func (p *ServerEventClientHeartbeatPayload) isEventPayload() {}
+
 type EventBus struct {
 	subscribers map[int][]func(payload EventPayload) error
 	mu          sync.RWMutex
@@ -97,7 +104,9 @@ func (bus *EventBus) PublishAsync(eventName int, payload EventPayload) {
 	defer bus.mu.RUnlock()
 	if handlers, ok := bus.subscribers[eventName]; ok {
 		for _, handler := range handlers {
-			go handler(payload)
+			go func(h func(payload EventPayload) error, p EventPayload) {
+				h(p)
+			}(handler, payload)
 		}
 	}
 }
