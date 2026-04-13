@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,12 +24,9 @@ func main() {
 	flag.Parse()
 
 	var ackCount int64
-	var sendCount int64
 
 	var wg sync.WaitGroup
 	wg.Add(*clients)
-
-	start := time.Now()
 
 	for i := 0; i < *clients; i++ {
 		go func(id int) {
@@ -51,14 +47,12 @@ func main() {
 					if err := client.GetConn().Send(msg); err != nil {
 						return err
 					}
-					atomic.AddInt64(&sendCount, 1)
 				}
 				return nil
 			})
 
 			if err := client.Start(); err != nil {
-				fmt.Println("client start error:", err)
-				return
+				panic(err)
 			}
 
 			// 等待足够时间收包
@@ -67,23 +61,5 @@ func main() {
 		}(i)
 	}
 
-	// 客户端侧 TPS 打点
-	go func() {
-		prevAck := int64(0)
-		prevTime := time.Now()
-		for {
-			time.Sleep(1 * time.Second)
-			now := time.Now()
-			cur := atomic.LoadInt64(&ackCount)
-			delta := cur - prevAck
-			elapsed := now.Sub(prevTime).Seconds()
-			fmt.Printf("[client] ack_total=%d ack_qps=%.0f\n", cur, float64(delta)/elapsed)
-			prevAck = cur
-			prevTime = now
-		}
-	}()
-
 	wg.Wait()
-	elapsed := time.Since(start).Seconds()
-	fmt.Printf("[client] sent=%d acks=%d elapsed=%.2fs avg_qps=%.0f\n", sendCount, ackCount, elapsed, float64(ackCount)/elapsed)
 }

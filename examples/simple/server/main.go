@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,26 +22,19 @@ func main() {
 		panic(err)
 	}
 
-	server.On(koduck.ServerEventClientConnected, func(_payload koduck.EventPayload) error {
-		payload := _payload.(*koduck.ServerEventClientConnectedPayload)
-		fmt.Println("客户端连接: ", payload.Conn.RemoteAddr())
+	server.On(koduck.ServerEventClientConnected, func(_ koduck.EventPayload) error {
 		return nil
 	})
 
-	server.On(koduck.ServerEventClientDisconnected, func(_payload koduck.EventPayload) error {
-		payload := _payload.(*koduck.ServerEventClientDisconnectedPayload)
-		fmt.Println("客户端断开连接: ", payload.ConnAddr)
+	server.On(koduck.ServerEventClientDisconnected, func(_ koduck.EventPayload) error {
 		return nil
 	})
-	server.On(koduck.ServerEventError, func(_payload koduck.EventPayload) error {
-		payload := _payload.(*koduck.ServerEventErrorPayload)
-		fmt.Println("服务端错误: ", payload.Err)
+	server.On(koduck.ServerEventError, func(_ koduck.EventPayload) error {
 		return nil
 	})
 
 	router := koduck.NewRouter()
-	koduck.RegisterRoute(router, 1000, func(c *koduck.Conn, params *SayName) error {
-		fmt.Println("客户端说它的名字是：" + params.Name)
+	koduck.RegisterRoute(router, 1000, func(c *koduck.Conn, _ *SayName) error {
 		msg, _ := koduck.EncodeMessage(2000, &Ok{
 			Message: "知道了",
 		})
@@ -60,9 +52,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	fmt.Println("服务端准备停止")
 	if err := server.Stop(); err != nil {
 		panic(err)
 	}
-	fmt.Println("服务端停止")
 }

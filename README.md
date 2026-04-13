@@ -49,8 +49,7 @@ go get github.com/shandialamp/koduck
 示例：
 ```go
 server.On(koduck.ServerEventClientConnected, func(p koduck.EventPayload) error {
-    payload := p.(*koduck.ServerEventClientConnectedPayload)
-    fmt.Println("新连接：", payload.Conn.String())
+  _ = p.(*koduck.ServerEventClientConnectedPayload)
     return nil
 })
 ```

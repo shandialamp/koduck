@@ -2,9 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"sync/atomic"
-	"time"
 
 	"github.com/shandialamp/koduck"
 )
@@ -33,8 +31,6 @@ func main() {
 	}
 
 	var recvCount int64
-	var lastCount int64
-	var lastTime = time.Now()
 
 	router := koduck.NewRouter()
 	koduck.RegisterRoute(router, 3000, func(c *koduck.Conn, p *Ping) error {
@@ -46,17 +42,6 @@ func main() {
 		return nil
 	})
 	server.SetRouter(router)
-
-	server.Every(1*time.Second, func() {
-		now := time.Now()
-		total := atomic.LoadInt64(&recvCount)
-		delta := total - lastCount
-		elapsed := now.Sub(lastTime).Seconds()
-		qps := float64(delta) / elapsed
-		fmt.Printf("[server] total=%d qps=%.0f\n", total, qps)
-		lastCount = total
-		lastTime = now
-	})
 
 	if err := server.Start(); err != nil {
 		panic(err)

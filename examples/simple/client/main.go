@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,15 +20,12 @@ func main() {
 	client := koduck.NewClientWithConfig(koduck.DefaultClientConfig())
 
 	router := koduck.NewRouter()
-	koduck.RegisterRoute(router, 2000, func(c *koduck.Conn, params *Ok) error {
-		fmt.Println("服务端说：" + params.Message)
+	koduck.RegisterRoute(router, 2000, func(c *koduck.Conn, _ *Ok) error {
 		return nil
 	})
 	client.SetRouter(router)
 
-	client.On(koduck.ClientEventConnected, func(_payload koduck.EventPayload) error {
-		payload := _payload.(*koduck.ClientEventConnectedPayload)
-		fmt.Println("连接成功: ", payload.Conn.RemoteAddr())
+	client.On(koduck.ClientEventConnected, func(_ koduck.EventPayload) error {
 		msg, _ := koduck.EncodeMessage(1000, &SayName{
 			Name: "lkg",
 		})
@@ -38,9 +34,7 @@ func main() {
 		}
 		return nil
 	})
-	client.On(koduck.ClientEventDisconnected, func(_payload koduck.EventPayload) error {
-		payload := _payload.(*koduck.ClientEventDisconnectedPayload)
-		fmt.Println("断开连接: ", payload.ServerAddr, "原因:", payload.Reason)
+	client.On(koduck.ClientEventDisconnected, func(_ koduck.EventPayload) error {
 		return nil
 	})
 
@@ -51,7 +45,5 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	fmt.Println("客户端准备停止")
 	client.Stop()
-	fmt.Println("客户端停止")
 }

@@ -3,7 +3,6 @@ package koduck
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 )
 
 const ServerHeartbeat = 1
@@ -26,7 +25,6 @@ func NewRouter() *Router {
 
 // Register 注册一个路由，绑定一个命令到处理函数
 func (r *Router) Register(method uint32, handler HandlerFunc) {
-	log.Printf("注册路由: %d", method)
 	r.routes[method] = handler
 }
 
